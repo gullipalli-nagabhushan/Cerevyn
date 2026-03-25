@@ -7,19 +7,20 @@ from groq import Groq
 class TTS:
     def __init__(self):
         self.groq_key = os.environ.get("GROQ_API_KEY")
-        self.hf_key = os.environ.get("HF_API_KEY") # For AI4Bharat Indic-TTS
+        self.hf_key = os.environ.get("HF_API_KEY") # For Meta MMS Indic-TTS
         self.client = Groq(api_key=self.groq_key) if self.groq_key else None
         
-        # Mapping for AI4Bharat Indic-TTS VITS models on HF
+        # Mapping for Meta MMS (Massively Multilingual Speech) models on HF
+        # These are much better supported for serverless inference than AI4Bharat
         self.indic_models = {
-            "te-IN": {"female": "ai4bharat/indic-tts-vits-tel-female", "male": "ai4bharat/indic-tts-vits-tel-male"},
-            "hi-IN": {"female": "ai4bharat/indic-tts-vits-hin-female", "male": "ai4bharat/indic-tts-vits-hin-male"},
-            "kn-IN": {"female": "ai4bharat/indic-tts-vits-kan-female", "male": "ai4bharat/indic-tts-vits-kan-male"},
-            "bn-IN": {"female": "ai4bharat/indic-tts-vits-ben-female", "male": "ai4bharat/indic-tts-vits-ben-male"},
-            "ta-IN": {"female": "ai4bharat/indic-tts-vits-tam-female", "male": "ai4bharat/indic-tts-vits-tam-male"},
-            "mr-IN": {"female": "ai4bharat/indic-tts-vits-mar-female", "male": "ai4bharat/indic-tts-vits-mar-male"},
-            "gu-IN": {"female": "ai4bharat/indic-tts-vits-guj-female", "male": "ai4bharat/indic-tts-vits-guj-male"},
-            "pa-IN": {"female": "ai4bharat/indic-tts-vits-pan-female", "male": "ai4bharat/indic-tts-vits-pan-male"},
+            "te-IN": "facebook/mms-tts-tel",
+            "hi-IN": "facebook/mms-tts-hin",
+            "kn-IN": "facebook/mms-tts-kan",
+            "bn-IN": "facebook/mms-tts-ben",
+            "ta-IN": "facebook/mms-tts-tam",
+            "mr-IN": "facebook/mms-tts-mar",
+            "gu-IN": "facebook/mms-tts-guj",
+            "pa-IN": "facebook/mms-tts-pan",
         }
 
     def generate_audio(self, text, accent="en-US", voice="hannah", speed=1.0, pitch=1.0, tone="professional", engine="orpheus", gender="female"):
@@ -56,7 +57,7 @@ class TTS:
             else:
                 print("Orpheus requested but text is not English. Falling back...")
 
-        # 2. Try AI4Bharat Indic-TTS (VITS) via Hugging Face
+        # 2. Try Meta MMS Indic-TTS via Hugging Face
         if (engine == "ai4bharat" or (engine == "auto" and not is_pure_english)) and accent in self.indic_models:
             if not self.hf_key:
                 print("Indic-TTS requested but HF_API_KEY is missing in .env. Falling back to gTTS.")
@@ -64,12 +65,12 @@ class TTS:
                 try:
                     import requests
                     use_gender = gender if gender in ["male", "female"] else ("male" if voice.lower() in ["austin", "daniel", "troy"] else "female")
-                    model_id = self.indic_models[accent][use_gender]
+                    model_id = self.indic_models[accent]
                     
                     # CORRECT HF ROUTER ENDPOINT (Serverless Inference)
                     api_url = f"https://router.huggingface.co/hf-inference/models/{model_id}"
                     headers = {"Authorization": f"Bearer {self.hf_key}"}
-                    print(f"--- INDIC-TTS RELOADED-FIX-V3 --- Using URL: {api_url}")
+                    print(f"--- INDIC-TTS (META-MMS) --- Using URL: {api_url}")
                     
                     # Try with a small timeout and potentially one retry for cold starts
                     for attempt in range(2):
