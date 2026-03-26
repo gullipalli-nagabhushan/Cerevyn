@@ -52,11 +52,11 @@ You can also run these common commands from the root directory using the proxy `
 
 - **Install Frontend**: `npm run install:frontend`
 - **Run Frontend**: `npm run dev:frontend`
-- **Run Backend**: `npm run dev:backend`
 - **Build Frontend**: `npm run build:frontend`
+- **Start Backend (Gunicorn)**: `npm run start:backend`
 
 4. **Environment Configuration**:
-   Create a `.env` file in the root with:
+   Create a `.env` file in the `backend/` directory with:
    ```env
    GROQ_API_KEY=your_groq_api_key
    HF_API_KEY=your_hugging_face_api_key
@@ -66,21 +66,27 @@ You can also run these common commands from the root directory using the proxy `
 
 ### Local Development
 1. **Start the Backend**:
-   ```bash
-   python server.py
-   ```
-2. **Run Frontend (from the root)**:
-   ```bash
-   npm run dev
-   ```
-   *Note: This proxies the command to the `frontend` directory using the root-level `package.json`.*
+   - Option 1 (from root): `npm run dev:backend`
+   - Option 2 (from backend dir): `python server.py`
+2. **Run Frontend**:
+   - Option 1 (from root): `npm run dev:frontend`
+   - Option 2 (from frontend dir): `npm run dev`
 
-### Docker
-The project includes a multi-stage Dockerfile for easy deployment:
-```bash
-docker build -t cerevyn-chatbot .
-docker run -p 8000:8000 --env-file .env cerevyn-chatbot
-```
+### 🚢 Deployment
+
+#### Backend (Railway)
+The project is optimized for deployment on **Railway**. 
+1. Create a new Service on Railway.
+2. Link your repository.
+3. **Important**: In the Service Settings, set the **Root Directory** to `backend`.
+4. Railway will automatically pick up the `backend/railway.json` and `backend/Dockerfile`.
+
+#### Frontend (Vercel)
+The frontend is optimized for **Vercel**.
+1. Create a new project on Vercel.
+2. Link your repository.
+3. Set the **Root Directory** to `frontend`.
+4. Vercel will pick up the `frontend/vercel.json` configuration.
 
 ## Project Structure
 

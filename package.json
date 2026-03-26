@@ -1,5 +1,5 @@
 {
-  "name": "cerevyn-root",
+  "name": "cerevyn",
   "private": true,
   "scripts": {
     "dev:frontend": "npm --prefix frontend run dev",
