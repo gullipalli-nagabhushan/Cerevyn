@@ -10,11 +10,12 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-# Copy requirements and install dependencies
+# Copy all files from the backend directory to the container
+# (Requires build context to be set to the backend/ folder)
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy all files
+# Copy logic
 COPY . .
 
 # Use python -m uvicorn for better reliability

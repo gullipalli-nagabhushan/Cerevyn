@@ -111,10 +111,13 @@ async def root():
     return {"message": "Cerevyn Voice API is running"}
 
 # Serve static files from the 'dist' directory (after npm run build)
-# Mounted at the end so it doesn't intercept API routes
-if os.path.exists("frontend/dist"):
-    app.mount("/", StaticFiles(directory="frontend/dist", html=True), name="static")
+# Mounted at the end so it doesn't intercept API routes or the root message
+if os.path.exists("../frontend/dist"):
+    app.mount("/", StaticFiles(directory="../frontend/dist", html=True), name="static")
 
 if __name__ == '__main__':
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    # Use PORT from environment or default to 8000
+    port = int(os.environ.get("PORT", 8000))
+    print(f"Starting server on port {port}...")
+    uvicorn.run(app, host="0.0.0.0", port=port)

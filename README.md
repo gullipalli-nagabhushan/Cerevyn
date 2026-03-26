@@ -26,21 +26,35 @@ Cerevyn is a cutting-edge, low-latency voice-to-voice chatbot built with **FastA
 
 ### Setup
 1. **Clone the repository** and navigate to the root directory.
-2. **Backend Setup**:
-   ```bash
-   python -m venv venv
-   # Activate venv:
-   # Windows: .\venv\Scripts\activate
-   # Mac/Linux: source venv/bin/activate
-   pip install -r requirements.txt
-   ```
-3. **Frontend Setup**:
-   ```bash
-   cd frontend
-   npm install
-   npm run build
-   cd ..
-   ```
+### 1. Backend Setup (FastAPI)
+```bash
+cd backend
+python -m venv venv
+# Windows:
+venv\Scripts\activate
+# Linux/Mac:
+source venv/bin/activate
+pip install -r requirements.txt
+python server.py
+```
+
+### 2. Frontend Setup (React/Vite)
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+---
+
+## 🚀 Running the App (Root Proxy)
+You can also run these common commands from the root directory using the proxy `package.json`:
+
+- **Install Frontend**: `npm run install:frontend`
+- **Run Frontend**: `npm run dev:frontend`
+- **Run Backend**: `npm run dev:backend`
+- **Build Frontend**: `npm run build:frontend`
+
 4. **Environment Configuration**:
    Create a `.env` file in the root with:
    ```env
@@ -68,12 +82,22 @@ docker build -t cerevyn-chatbot .
 docker run -p 8000:8000 --env-file .env cerevyn-chatbot
 ```
 
-## 📁 File Structure
-- `server.py`: FastAPI server handling STT, LLM, and TTS orchestration.
-- `stt.py`: Integration with Groq Cloud Whisper API.
-- `llm.py`: Llama 3 streaming logic.
-- `tts.py`: Multi-engine TTS (Groq, Meta MMS, gTTS).
-- `vad.py`: Voice Activity Detection utilities.
-- `frontend/`: React source code and Vite configuration.
-- `requirements.txt`: Python backend dependencies.
-- `Dockerfile`: Production deployment configuration.
+## Project Structure
+
+```text
+Cerevyn/
+├── backend/                # FastAPI Backend Service
+│   ├── server.py           # API Orchestration
+│   ├── stt.py              # Groq Whisper STT
+│   ├── llm.py              # Groq Llama3 LLM
+│   ├── tts.py              # Meta MMS & gTTS
+│   ├── requirements.txt    # Python Dependencies
+│   ├── Dockerfile          # Production Build
+│   └── railway.json        # Railway Config
+├── frontend/               # React (Vite) Frontend
+│   ├── src/                # Source Code
+│   ├── package.json        # Node Dependencies
+│   └── vercel.json         # Vercel Config
+├── README.md               # Project Documentation
+└── package.json            # Root proxy for npm commands
+```
