@@ -398,9 +398,14 @@ function App() {
 
   useEffect(() => {
     const handleKeyDown = (e) => {
+      // Space or Tab to toggle/stop
       if (e.code === 'Space' || e.code === 'Tab') {
         e.preventDefault();
-        toggleMic();
+        if (state === 'speaking') {
+          stopAudio();
+        } else {
+          toggleMic();
+        }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -451,15 +456,17 @@ function App() {
       {/* Control Center */}
       <footer className="bottom-controls">
         <div className="main-action">
-          <button
-            className={`mic-toggle ${isLive ? 'active' : ''}`}
-            onClick={toggleMic}
-          >
-            {isLive ? <MicOff size={28} /> : <Mic size={28} />}
-          </button>
+          {state !== 'speaking' && (
+            <button
+              className={`mic-toggle ${isLive ? 'active' : ''}`}
+              onClick={toggleMic}
+            >
+              {isLive ? <MicOff size={28} /> : <Mic size={28} />}
+            </button>
+          )}
 
           {state === 'speaking' && (
-            <button className="secondary-btn stop-ai-btn" onClick={stopAudio} title="Stop AI">
+            <button className="secondary-btn stop-ai-btn active" onClick={stopAudio} title="Stop AI">
               <Square size={28} fill="currentColor" />
             </button>
           )}

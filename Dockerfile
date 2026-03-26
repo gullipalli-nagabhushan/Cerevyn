@@ -1,9 +1,11 @@
 # Backend Dockerfile for Railway (Separate Service)
 FROM python:3.10-slim
 
-# Install system dependencies for audio processing
+# Install system dependencies for audio processing and build tools
 RUN apt-get update && apt-get install -y \
     ffmpeg \
+    gcc \
+    python3-dev \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

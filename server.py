@@ -38,7 +38,9 @@ async def transcribe(audio: UploadFile = File(...)):
     
     try:
         # Detect language and transcribe
+        print(f"--- Transcribing audio from {audio_path} ---")
         transcript, language, duration = stt_base.transcribe(audio_path)
+        print(f"--- STT Result: [{language}] '{transcript}' (in {duration}ms) ---")
         return {"transcript": transcript, "language": language, "confidence": 1.0}
     finally:
         if os.path.exists(audio_path): os.remove(audio_path)

@@ -16,12 +16,13 @@ class STT:
         with open(audio_path, "rb") as file:
             transcription = self.client.audio.transcriptions.create(
                 file=(os.path.basename(audio_path), file.read()),
-                model="whisper-large-v3",
+                model="whisper-large-v3-turbo",
                 response_format="verbose_json",
             )
         
         duration_ms = int((time.time() - start_time) * 1000)
         transcript = transcription.text.strip()
         language = getattr(transcription, 'language', 'en')
+        print(f"STT: [{language}] {transcript} ({duration_ms}ms)")
         
         return transcript, language, duration_ms
