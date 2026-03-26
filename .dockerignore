@@ -1,0 +1,16 @@
+# Ignore files to keep Docker context small
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+venv/
+.env
+.git/
+.vscode/
+.idea/
+
+# Node / Frontend
+node_modules/
+frontend/node_modules/
+dist/
+frontend/dist/

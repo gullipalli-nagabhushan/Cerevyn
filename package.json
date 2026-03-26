@@ -1,0 +1,10 @@
+{
+  "name": "cerevyn-root",
+  "private": true,
+  "scripts": {
+    "dev": "npm --prefix frontend run dev",
+    "build": "npm --prefix frontend run build",
+    "frontend-install": "npm install --prefix frontend",
+    "server": "python server.py"
+  }
+}

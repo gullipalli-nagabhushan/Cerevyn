@@ -6,4 +6,4 @@ gTTS
 pydub
 requests
 python-multipart
-cors
+webrtcvad

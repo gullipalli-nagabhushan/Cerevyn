@@ -5,6 +5,7 @@ import asyncio
 from fastapi import FastAPI, UploadFile, File, Form, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
 from stt import STT
 from llm import LLM
@@ -14,6 +15,7 @@ import io
 load_dotenv()
 app = FastAPI()
 
+# CORS for local development
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -88,6 +90,11 @@ async def speak(request: Request):
 @app.get("/api/chat-history")
 async def get_history():
     return llm_service.history
+
+# Serve static files from the 'dist' directory (after npm run build)
+# Mounted at the end so it doesn't intercept API routes
+if os.path.exists("frontend/dist"):
+    app.mount("/", StaticFiles(directory="frontend/dist", html=True), name="static")
 
 if __name__ == '__main__':
     import uvicorn

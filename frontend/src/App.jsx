@@ -1,7 +1,72 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Settings, Mic, MicOff, RotateCcw, Play } from 'lucide-react';
+import { Settings, Mic, MicOff, RotateCcw, Play, Square, ChevronDown } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import './App.css';
+
+// --- CUSTOM COMPONENTS ---
+
+function CustomSelect({ value, onChange, options, label }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (containerRef.current && !containerRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const displayValue = Array.isArray(options)
+    ? (typeof options[0] === 'object' ? options.find(o => o.value === value)?.label : value)
+    : options[value] || value;
+
+  return (
+    <div className="custom-select-container" ref={containerRef}>
+      <div
+        className={`custom-select-trigger ${isOpen ? 'open' : ''}`}
+        onClick={() => setIsOpen(!isOpen)}
+      >
+        <span>{displayValue}</span>
+        <ChevronDown size={18} className={`chevron ${isOpen ? 'up' : ''}`} />
+      </div>
+
+      {isOpen && (
+        <div className="custom-select-options">
+          {Array.isArray(options) ? options.map((opt, i) => {
+            const val = typeof opt === 'object' ? opt.value : opt;
+            const lbl = typeof opt === 'object' ? opt.label : opt;
+            return (
+              <div
+                key={i}
+                className={`custom-select-option ${value === val ? 'selected' : ''}`}
+                onClick={() => {
+                  onChange(val);
+                  setIsOpen(false);
+                }}
+              >
+                {lbl}
+              </div>
+            );
+          }) : Object.entries(options).map(([val, lbl], i) => (
+            <div
+              key={i}
+              className={`custom-select-option ${value === val ? 'selected' : ''}`}
+              onClick={() => {
+                onChange(val);
+                setIsOpen(false);
+              }}
+            >
+              {lbl}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
@@ -61,7 +126,7 @@ function useMediaRecorder(onStop) {
   const startRecording = async () => {
     chunksRef.current = [];
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    
+
     // VAD Logic
     const audioContext = new (window.AudioContext || window.webkitAudioContext)();
     const source = audioContext.createMediaStreamSource(stream);
@@ -69,13 +134,13 @@ function useMediaRecorder(onStop) {
     analyzer.fftSize = 512;
     source.connect(analyzer);
     const buffer = new Uint8Array(analyzer.frequencyBinCount);
-    
+
     let silenceStart = Date.now();
     const checkSilence = () => {
       if (!mediaRecorderRef.current || mediaRecorderRef.current.state === 'inactive') return;
       analyzer.getByteFrequencyData(buffer);
       const volume = buffer.reduce((a, b) => a + b) / buffer.length;
-      
+
       if (volume > 5) { // Threshold for "talking"
         silenceStart = Date.now();
       } else if (Date.now() - silenceStart > 1500) { // 1.5s silence
@@ -118,6 +183,7 @@ function App() {
   const [liveTranscript, setLiveTranscript] = useState('');
   const [showSettings, setShowSettings] = useState(false);
   const chatEndRef = useRef(null);
+  const chatWindowRef = useRef(null);
   const activeAudioRef = useRef(null);
   const isLiveRef = useRef(false); // For use in async closures
 
@@ -129,7 +195,7 @@ function App() {
     if (activeAudioRef.current) {
       activeAudioRef.current.pause();
       activeAudioRef.current = null;
-      audioResultsRef.current = {}; 
+      audioResultsRef.current = {};
       nextToPlayRef.current = 0;
       isPlayingQueueRef.current = false;
       if (state === 'speaking') setState('idle');
@@ -164,12 +230,12 @@ function App() {
       const chatRes = await fetch(`${BASE_URL}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          transcript, 
-          accent: settings.accent, 
-          tone: settings.tone, 
+        body: JSON.stringify({
+          transcript,
+          accent: settings.accent,
+          tone: settings.tone,
           model: settings.model,
-          history 
+          history
         })
       });
 
@@ -185,7 +251,7 @@ function App() {
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-        
+
         const chunk = decoder.decode(value, { stream: true });
         fullText += chunk;
         currentSentenceText += chunk;
@@ -211,7 +277,7 @@ function App() {
       if (currentSentenceText.trim().length > 0) {
         triggerSpeech(currentSentenceText.trim(), sentenceIndex++);
       }
-      
+
       setState('idle');
     } catch (err) {
       console.error(err);
@@ -226,18 +292,18 @@ function App() {
   const processQueue = async () => {
     if (isPlayingQueueRef.current) return;
     isPlayingQueueRef.current = true;
-    
+
     while (true) {
       const index = nextToPlayRef.current;
       const blob = audioResultsRef.current[index];
       if (!blob) break;
-      
+
       setState('speaking');
       await playAudio(blob);
       delete audioResultsRef.current[index];
       nextToPlayRef.current++;
     }
-    
+
     isPlayingQueueRef.current = false;
     setState('idle');
   };
@@ -247,18 +313,18 @@ function App() {
       const speakRes = await fetch(`${BASE_URL}/api/speak`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          text, 
+        body: JSON.stringify({
+          text,
           engine: settings.engine,
           gender: settings.gender,
-          accent: settings.accent, 
+          accent: settings.accent,
           voice: settings.voice,
-          speed: settings.speed, 
+          speed: settings.speed,
           pitch: settings.pitch,
           tone: settings.tone
         })
       });
-      
+
       const usedAccent = speakRes.headers.get('X-Used-Accent');
       if (usedAccent && usedAccent !== settings.accent) {
         settings.setAccent(usedAccent);
@@ -278,7 +344,7 @@ function App() {
       const audio = new Audio(url);
       audio.playbackRate = settings.speed;
       activeAudioRef.current = audio;
-      
+
       audio.onended = () => {
         URL.revokeObjectURL(url);
         activeAudioRef.current = null;
@@ -288,7 +354,7 @@ function App() {
         console.error("Audio Playback Error:", e);
         resolve();
       };
-      
+
       const playPromise = audio.play();
       if (playPromise !== undefined) {
         playPromise.catch(e => {
@@ -332,154 +398,167 @@ function App() {
 
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if (e.code === 'Space' && state === 'idle') {
+      if (e.code === 'Space' || e.code === 'Tab') {
         e.preventDefault();
         toggleMic();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [state]);
+  }, [isLive, state]);
 
   return (
     <div className="cerevyn-container">
+      {/* Background Atmosphere */}
+      <div className={`aura-layer ${state !== 'idle' ? 'active' : ''}`} />
+
       {/* Top Bar */}
-      <div className="top-bar">
+      <header className="top-bar">
         <div className="branding">
-          <img src="/cerevyn-icon.png" alt="Cerevyn Logo" className="brand-logo" />
-          <span>Cerevyn</span>
+          <div className="status-indicator">
+            <span className={`status-dot ${state !== 'idle' ? 'active' : ''}`} />
+            <span>{state.charAt(0).toUpperCase() + state.slice(1)}</span>
+          </div>
+          <h1 className="brand-text">Cerevyn Live</h1>
         </div>
         <div className="actions">
-          <div className={`status-badge ${state}`}>
-            {state.toUpperCase()}
-          </div>
-          <button className="icon-btn" onClick={() => setShowSettings(!showSettings)}>
-            <Settings size={20} />
+          <button className="secondary-btn" onClick={() => setShowSettings(true)}>
+            <Settings size={18} />
           </button>
         </div>
-      </div>
+      </header>
 
-      {/* Main Area */}
-      <div className="voice-stage">
-        <div className={`orb ${state}`}></div>
-        
-        <div className="wave-bars">
-          {[...Array(7)].map((_, i) => (
-            <div key={i} className={`wave-bar ${state}`} style={{ animationDelay: `${i * 0.1}s` }}></div>
-          ))}
+      {/* Main AI Stage */}
+      <main className="voice-stage">
+        <div className="orb-container">
+          <div className={`orb ${state}`} />
+          <div className="orb-status-text">
+            {state === 'idle' ? 'Start' : state}
+          </div>
         </div>
 
-        <div className="live-transcript">
-          {liveTranscript || (state === 'listening' ? 'Listening...' : '')}
-        </div>
-      </div>
-
-      {/* Transcript Area */}
-      <div className="chat-area">
-        {history.map((msg, idx) => (
-          <div key={idx} className={`chat-bubble ${msg.role}`}>
-            {msg.role === 'assistant' && <div className="avatar-dot"></div>}
-            <div className="bubble-content">
-              <ReactMarkdown>{msg.content}</ReactMarkdown>
+        {/* Minimal Chat Overlay */}
+        <div className="chat-window" ref={chatWindowRef}>
+          {history.length > 0 && history.map((m, i) => (
+            <div key={i} className={`chat-bubble ${m.role}`}>
+              {m.content}
             </div>
-          </div>
-        ))}
-        <div ref={chatEndRef} />
-      </div>
-
-      {/* Bottom Bar */}
-      <div className="bottom-bar">
-        <div className="bar-actions">
-           {state === 'speaking' && (
-             <button className="stop-btn" onClick={stopAudio}>Stop Speaking</button>
-           )}
-           <button className="text-btn" onClick={clear}>Clear</button>
+          ))}
+          <div ref={chatEndRef} />
         </div>
-        
-        <button className={`main-mic-btn ${state}`} onClick={toggleMic}>
-          {state === 'listening' ? <MicOff size={32} /> : <Mic size={32} />}
-        </button>
+      </main>
 
-        <button className="text-btn" onClick={() => {
-          setLiveTranscript("Demo: How is the weather?");
-          handleAudioBlob(new Blob()); // Dummy blob for demo
-        }}>Demo</button>
-      </div>
+      {/* Control Center */}
+      <footer className="bottom-controls">
+        <div className="main-action">
+          <button
+            className={`mic-toggle ${isLive ? 'active' : ''}`}
+            onClick={toggleMic}
+          >
+            {isLive ? <MicOff size={28} /> : <Mic size={28} />}
+          </button>
 
-      {/* Settings Panel */}
+          {state === 'speaking' && (
+            <button className="secondary-btn stop-ai-btn" onClick={stopAudio} title="Stop AI">
+              <Square size={28} fill="currentColor" />
+            </button>
+          )}
+        </div>
+      </footer>
+
+      {/* Settings Modal (Responsive Card) */}
       {showSettings && (
-        <div className="settings-panel">
-          <div className="settings-header">
-            <h3>Assistant Settings</h3>
-            <button className="close-btn" onClick={() => setShowSettings(false)}>×</button>
-          </div>
-          
-          <div className="setting-item">
-            <label>TTS Engine</label>
-            <select value={settings.engine} onChange={e => settings.setEngine(e.target.value)}>
-              {Object.keys(TTS_DATA).map(e => (
-                <option key={e} value={e}>{TTS_DATA[e].name}</option>
-              ))}
-            </select>
-          </div>
+        <div className="settings-modal" onClick={() => setShowSettings(false)}>
+          <div className="settings-card" onClick={e => e.stopPropagation()}>
+            <div className="settings-section">
+              <h3>Vocal Persona</h3>
+              <div className="grid-settings">
+                <div className="option-group">
+                  <label>Engine</label>
+                  <CustomSelect
+                    value={settings.engine}
+                    onChange={v => {
+                      settings.setEngine(v);
+                      const firstVoice = TTS_DATA[v]?.[settings.gender]?.[0] || '';
+                      settings.setVoice(firstVoice);
+                    }}
+                    options={{
+                      orpheus: "Groq Orpheus (English)",
+                      ai4bharat: "Meta MMS (Multilingual)",
+                      gtts: "Google TTS (Standard)"
+                    }}
+                  />
+                </div>
+                <div className="option-group">
+                  <label>Gender</label>
+                  <CustomSelect
+                    value={settings.gender}
+                    onChange={v => {
+                      settings.setGender(v);
+                      const firstVoice = TTS_DATA[settings.engine]?.[v]?.[0] || '';
+                      settings.setVoice(firstVoice);
+                    }}
+                    options={["female", "male"]}
+                  />
+                </div>
+              </div>
+            </div>
 
-          <div className="setting-item">
-            <label>Gender</label>
-            <select value={settings.gender} onChange={e => {
-              settings.setGender(e.target.value);
-              // Auto-pick first voice for new gender
-              settings.setVoice(TTS_DATA[settings.engine][e.target.value][0]);
-            }}>
-              <option value="female">Female</option>
-              <option value="male">Male</option>
-            </select>
-          </div>
+            <div className="settings-section">
+              <h3>Voice & Accent</h3>
+              <div className="grid-settings">
+                <div className="option-group">
+                  <label>Voice</label>
+                  <CustomSelect
+                    value={settings.voice}
+                    onChange={v => settings.setVoice(v)}
+                    options={TTS_DATA[settings.engine]?.[settings.gender] || []}
+                  />
+                </div>
+                <div className="option-group">
+                  <label>Accent & Region</label>
+                  <CustomSelect
+                    value={settings.accent}
+                    onChange={v => settings.setAccent(v)}
+                    options={{
+                      'en-US': "English (US)",
+                      'en-IN': "English (India)",
+                      'hi-IN': "Hindi (India)",
+                      'te-IN': "Telugu (India)",
+                      'ta-IN': "Tamil (India)",
+                      'kn-IN': "Kannada (India)"
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
 
-          <div className="setting-item">
-            <label>Voice Persona</label>
-            <select value={settings.voice} onChange={e => settings.setVoice(e.target.value)}>
-              {TTS_DATA[settings.engine][settings.gender].map(v => (
-                <option key={v} value={v}>{v.charAt(0).toUpperCase() + v.slice(1)}</option>
-              ))}
-            </select>
-          </div>
+            <div className="settings-section">
+              <h3>Expression</h3>
+              <div className="grid-settings">
+                <div className="option-group">
+                  <label>Tone</label>
+                  <CustomSelect
+                    value={settings.tone}
+                    onChange={v => settings.setTone(v)}
+                    options={["professional", "friendly", "creative", "concise"]}
+                  />
+                </div>
+                <div className="option-group">
+                  <label>Speed ({settings.speed}x)</label>
+                  <input
+                    type="range" min="0.5" max="2.0" step="0.1"
+                    value={settings.speed}
+                    onChange={e => settings.setSpeed(parseFloat(e.target.value))}
+                  />
+                </div>
+              </div>
+            </div>
 
-          <div className="setting-item">
-            <label>Voice Accent</label>
-            <select value={settings.accent} onChange={e => settings.setAccent(e.target.value)}>
-              <option value="en-US">English (US)</option>
-              <option value="en-IN">English (India)</option>
-              <option value="te-IN">Telugu (India)</option>
-              <option value="kn-IN">Kannada (India)</option>
-              <option value="bn-IN">Bengali (India)</option>
-              <option value="ta-IN">Tamil (India)</option>
-              <option value="or-IN">Odia (India)</option>
-              <option value="hi-IN">Hindi (India)</option>
-              <option value="es-ES">Spanish (Spain)</option>
-              <option value="fr-FR">French (France)</option>
-            </select>
-          </div>
 
-          <div className="setting-item">
-            <label>Tone</label>
-            <select value={settings.tone} onChange={e => settings.setTone(e.target.value)}>
-              <option value="professional">Professional</option>
-              <option value="casual">Casual</option>
-              <option value="friendly">Friendly</option>
-              <option value="excited">Excited</option>
-              <option value="whisper">Whisper</option>
-              <option value="concise">Concise</option>
-            </select>
-          </div>
-
-          <div className="setting-item">
-            <label>Speed: {settings.speed}x</label>
-            <input type="range" min="0.5" max="2.0" step="0.1" value={settings.speed} onChange={e => settings.setSpeed(e.target.value)} />
-          </div>
-
-          <div className="setting-item">
-            <label>Pitch: {settings.pitch}</label>
-            <input type="range" min="0.5" max="2.0" step="0.1" value={settings.pitch} onChange={e => settings.setPitch(e.target.value)} />
+            <button className="secondary-btn" style={{ width: '100%', marginTop: '1rem', background: '#fff', color: '#000' }} onClick={() => setShowSettings(false)}>
+              Back to Session
+            </button>
           </div>
         </div>
       )}
