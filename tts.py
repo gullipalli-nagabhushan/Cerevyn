@@ -68,9 +68,8 @@ class TTS:
                     model_id = self.indic_models[accent]
                     
                     # CORRECT HF ROUTER ENDPOINT (Serverless Inference)
-                    api_url = f"https://router.huggingface.co/hf-inference/models/{model_id}"
+                    api_url = f"https://api-inference.huggingface.co/models/{model_id}"
                     headers = {"Authorization": f"Bearer {self.hf_key}"}
-                    print(f"--- INDIC-TTS (META-MMS) --- Using URL: {api_url}")
                     
                     # Try with a small timeout and potentially one retry for cold starts
                     for attempt in range(2):
@@ -87,7 +86,9 @@ class TTS:
                             print(f"Indic-TTS Model {model_id} is loading (503). Retrying in 5s...")
                             time.sleep(5)
                         else:
-                            print(f"Indic-TTS API failed ({response.status_code}): {response.text}")
+                            # Safe print for response text
+                            safe_err = response.text.encode('ascii', 'ignore').decode('ascii')
+                            print(f"Indic-TTS API failed ({response.status_code}): {safe_err}")
                             break # Don't retry on 400s/401s
                 except Exception as e:
                     print(f"Indic-TTS Integration Error: {e}")

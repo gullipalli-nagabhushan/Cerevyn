@@ -1,7 +1,9 @@
 import os
+import sys
 import time
 import tempfile
 import asyncio
+
 from fastapi import FastAPI, UploadFile, File, Form, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
@@ -15,10 +17,15 @@ import io
 load_dotenv()
 app = FastAPI()
 
-# CORS for local development
+# CORS Configuration
+# Allowed: Production Vercel URL and Local Development
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "https://cerevyn-bot.vercel.app",
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -80,7 +87,9 @@ async def speak(request: Request):
     engine = data.get("engine", "orpheus")
     gender = data.get("gender", "female")
     
-    print(f"TTS Request: engine={engine}, gender={gender}, voice={voice}, accent={accent}, text='{text[:30]}...'")
+    # Safe print for non-ASCII text on various terminals
+    safe_text = text[:30].encode('ascii', 'ignore').decode('ascii')
+    print(f"TTS Request: engine={engine}, gender={gender}, voice={voice}, accent={accent}, text='{safe_text}...'")
     audio_data, type, used_accent = tts_service.generate_audio(text, accent, voice, speed, pitch, tone, engine, gender)
     
     if type == "file":
@@ -92,6 +101,14 @@ async def speak(request: Request):
 @app.get("/api/chat-history")
 async def get_history():
     return llm_service.history
+
+@app.get("/health")
+async def health():
+    return {"status": "ok", "timestamp": time.time()}
+
+@app.get("/")
+async def root():
+    return {"message": "Cerevyn Voice API is running"}
 
 # Serve static files from the 'dist' directory (after npm run build)
 # Mounted at the end so it doesn't intercept API routes

@@ -6,4 +6,3 @@ gTTS
 pydub
 requests
 python-multipart
-webrtcvad
