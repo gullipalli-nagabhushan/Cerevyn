@@ -2,9 +2,14 @@
 
 Cerevyn is a cutting-edge, low-latency voice-to-voice chatbot built with **FastAPI** (Backend) and **React/Vite** (Frontend). It leverages **Groq Cloud** for lightning-fast speech-to-text (Whisper) and LLM streaming (Llama 3), with a versatile TTS engine supporting both global and Indic languages via **gTTS** and **Meta MMS**.
 
+## 🌐 Live Demo
+- **Frontend (Web)**: [cerevyn-bot.vercel.app](https://cerevyn-bot.vercel.app)
+- **Backend (API)**: [cerevyn-voice.up.railway.app](https://cerevyn-voice.up.railway.app/)
+
 ## 🚀 Features
 - **Real-time Pipeline**: Achieves sub-3s end-to-end latency by overlapping STT, LLM, and TTS stages.
 - **Polyglot Support**: Auto-detects and synthesizes speech in major Indic languages (Telugu, Hindi, Kannada, etc.) and English.
+- **Usability Focus**: Press **Space** or **Tab** to quickly toggle the microphone or interrupt the AI while it's speaking.
 - **Streaming Responses**: Text generates and streams to the UI instantly for a more natural conversation.
 - **Modern UI**: Polished, glassmorphic React interface with real-time status indicators and voice activity detection (VAD).
 - **Flexible TTS**: Uses Groq's Orpheus for English and Meta MMS (via Hugging Face) for Indic voices.
