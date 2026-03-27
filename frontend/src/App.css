@@ -567,6 +567,9 @@ body {
   .bottom-controls { padding: 1.5rem; }
   .mic-toggle { width: 68px; height: 68px; }
   .grid-settings { grid-template-columns: 1fr; }
+  .chat-bubble { max-width: 85%; width: 85%; }
+  .chat-bubble.user { width: 80%; }
+  .chat-bubble.assistant { width: 80%; }
 }
 
 /* Tablet */

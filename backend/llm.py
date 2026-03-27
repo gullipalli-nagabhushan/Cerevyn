@@ -16,22 +16,17 @@ class LLM:
             self.groq_client = Groq(api_key=self.groq_key)
         else:
             self.groq_client = None
+
+    def get_response(self, prompt, tone="professional", language="en", history=None):
+        if history is None:
+            history = []
             
-        self.history = []
-        self.max_history = 6
-
-    def add_to_history(self, role, content):
-        self.history.append({"role": role, "content": content})
-        if len(self.history) > self.max_history * 2:
-            self.history = self.history[-self.max_history * 2:]
-
-    def get_response(self, prompt, tone="professional", language="en"):
         # Tone-specific instructions
         tone_instructions = {
             "friendly": "Speak with a warm, energetic, and helpful personality. Use casual but polite language.",
             "professional": "Maintain a polished, authoritative yet helpful demeanor. Use formal and clear language.",
             "concise": "Be extremely brief and direct. Provide the answer in as few words as possible while remaining helpful.",
-            "whisper": "Speak softly and intimately. Use shorter sentences. (Note: Audio will be processed to sound like a whisper).",
+            "whisper": "Speak softly and intimately. Use shorter sentences.",
             "excited": "Speak with high energy and enthusiasm. Use expressive words!",
         }
         instruction = tone_instructions.get(tone.lower(), "Be helpful and natural.")
@@ -42,12 +37,21 @@ class LLM:
             f"Always respond in {language}. Keep responses optimized for spoken conversation. "
             "Avoid complex markdown. Focus on being natural, responsive, and context-aware."
         )
-        self.add_to_history("user", prompt)
         
+        # Prepare messages
+        # Safety filter: ensure all history items have valid content
+        sanitized_history = [
+            m for m in history 
+            if isinstance(m.get("content"), str) and m.get("content").strip()
+        ]
+        
+        # Add current prompt
+        sanitized_history.append({"role": "user", "content": prompt})
+        
+        messages = [{"role": "system", "content": system_prompt}] + sanitized_history
+
         try:
             if self.groq_client:
-                # Groq logic
-                messages = [{"role": "system", "content": system_prompt}] + self.history
                 completion = self.groq_client.chat.completions.create(
                     model="llama-3.1-8b-instant",
                     messages=messages,
@@ -61,7 +65,6 @@ class LLM:
                         full_response += content
                         yield content, 0
                 
-                self.add_to_history("assistant", full_response)
             else:
                 yield "I'm sorry, Groq client is not configured.", 0
 

@@ -4,7 +4,8 @@ import time
 import tempfile
 import asyncio
 
-from fastapi import FastAPI, UploadFile, File, Form, Request, Response
+from fastapi import FastAPI, UploadFile, File, Form, Request, Response, HTTPException, Header, Depends, Security
+from fastapi.security.api_key import APIKeyHeader
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
@@ -36,7 +37,16 @@ app.add_middleware(
     expose_headers=["X-Used-Accent"],
 )
 
-# Security Headers Middleware
+# API Key Configuration
+API_SECURITY_KEY = os.environ.get("API_SECURITY_KEY", "dev-key-123")
+api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
+
+async def get_api_key(api_key: str = Security(api_key_header)):
+    if api_key != API_SECURITY_KEY:
+        raise HTTPException(status_code=401, detail="Unauthorized: Invalid API Key")
+    return api_key
+
+# Security Headers Middleware (Headers only)
 @app.middleware("http")
 async def add_security_headers(request: Request, call_next):
     response = await call_next(request)
@@ -44,7 +54,14 @@ async def add_security_headers(request: Request, call_next):
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["X-XSS-Protection"] = "1; mode=block"
     response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
-    response.headers["Content-Security-Policy"] = "default-src 'self'; frame-ancestors 'none';"
+    # Relaxed CSP for Swagger UI / Docs support
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+        "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+        "img-src 'self' data: https://fastapi.tiangolo.com; "
+        "frame-ancestors 'none';"
+    )
     return response
 
 # Services
@@ -53,7 +70,7 @@ tts_service = TTS()
 stt_base = STT() # Now using Groq Cloud API
 
 @app.post("/api/transcribe")
-async def transcribe(audio: UploadFile = File(...)):
+async def transcribe(audio: UploadFile = File(...), token: str = Depends(get_api_key)):
     with tempfile.NamedTemporaryFile(delete=False, suffix='.wav') as tmp:
         tmp.write(await audio.read())
         audio_path = tmp.name
@@ -68,30 +85,36 @@ async def transcribe(audio: UploadFile = File(...)):
         if os.path.exists(audio_path): os.remove(audio_path)
 
 @app.post("/api/chat")
-async def chat(request: Request):
+async def chat(request: Request, token: str = Depends(get_api_key)):
     data = await request.json()
-    transcript = data.get("transcript")
-    accent = data.get("accent", "en-US")
+    # Support both 'prompt' (new) and 'transcript' (old) keys
+    transcript = data.get("prompt") or data.get("transcript")
+    if not transcript:
+        raise HTTPException(status_code=400, detail="Missing prompt or transcript")
+
+    accent = data.get("language") or data.get("accent", "en-US")
     tone = data.get("tone", "professional")
     history = data.get("history", [])
     model_type = data.get("model", "groq")
     
-    # detected language should be passed or detected during transcribe
-    lang = accent.split("-")[0]
+    # Extract language code (e.g., 'en' from 'en-US')
+    lang = accent.split("-")[0] if "-" in accent else accent
     
     # Use a streaming response for the text to make it feel instant
+    # Use the history passed from the frontend for session isolation
     async def generate_chunks():
         full_response = ""
-        for chunk, _ in llm_service.get_response(transcript, tone, lang):
+        # Pass history to ensure context is maintained per-user
+        for chunk, _ in llm_service.get_response(transcript, tone, lang, history=history):
             full_response += chunk
             yield chunk
         # Add to history at the end
-        # llm_service.add_to_history("assistant", full_response) # Handled in LLM.get_response already
+        # Handled in LLM.get_response already
 
     return StreamingResponse(generate_chunks(), media_type="text/plain")
 
 @app.post("/api/speak")
-async def speak(request: Request):
+async def speak(request: Request, token: str = Depends(get_api_key)):
     data = await request.json()
     text = data.get("text")
     accent = data.get("accent", "en-US")
@@ -114,7 +137,7 @@ async def speak(request: Request):
         return Response(content=audio_data, media_type="audio/wav", headers={"X-Used-Accent": used_accent})
 
 @app.get("/api/chat-history")
-async def get_history():
+async def get_history(token: str = Depends(get_api_key)):
     return llm_service.history
 
 @app.get("/health")
@@ -125,14 +148,12 @@ async def health():
 async def root():
     return {"message": "Cerevyn Voice API is running"}
 
-# Serve static files from the 'dist' directory (after npm run build)
-# Mounted at the end so it doesn't intercept API routes or the root message
-if os.path.exists("../frontend/dist"):
-    app.mount("/", StaticFiles(directory="../frontend/dist", html=True), name="static")
 
 if __name__ == '__main__':
     import uvicorn
     # Use PORT from environment or default to 8000
     port = int(os.environ.get("PORT", 8000))
-    print(f"Starting server on port {port}...")
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    # Enable reload only for local development
+    is_dev = os.environ.get("RAILWAY_ENVIRONMENT_NAME") is None
+    print(f"Starting server on port {port} (Reload: {is_dev})...")
+    uvicorn.run("server:app", host="0.0.0.0", port=port, reload=is_dev)

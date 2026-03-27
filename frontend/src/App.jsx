@@ -68,8 +68,10 @@ function CustomSelect({ value, onChange, options, label }) {
   );
 }
 
-const BASE_URL = import.meta.env.VITE_API_URL || 
-  (import.meta.env.DEV ? 'http://localhost:8000' : 'https://cerevyn-voice.up.railway.app');
+const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const API_KEY = import.meta.env.VITE_API_KEY || 'dev-key-123';
+
+const isMobile = () => /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 
 // --- CUSTOM HOOKS ---
 
@@ -139,7 +141,12 @@ function useMediaRecorder(onStop) {
   const startRecording = async () => {
     chunksRef.current = [];
     if (!streamRef.current) await preWarm();
-    
+
+    // Ensure AudioContext is active (critical for iOS)
+    if (audioContextRef.current?.state === 'suspended') {
+      await audioContextRef.current.resume();
+    }
+
     const stream = streamRef.current;
     const audioContext = audioContextRef.current;
 
@@ -156,7 +163,8 @@ function useMediaRecorder(onStop) {
       analyzer.getByteFrequencyData(buffer);
       const volume = buffer.reduce((a, b) => a + b) / buffer.length;
 
-      if (volume > 5) { // Threshold for "talking"
+      const threshold = isMobile() ? 12 : 5; // Higher threshold on mobile to ignore noise
+      if (volume > threshold) { // Threshold for "talking"
         silenceStart = Date.now();
       } else if (Date.now() - silenceStart > 1000) { // 1.0s silence
         stopRecording();
@@ -170,7 +178,9 @@ function useMediaRecorder(onStop) {
       if (e.data.size > 0) chunksRef.current.push(e.data);
     };
     mediaRecorderRef.current.onstop = () => {
-      const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
+      // Determine format (Mobile compatibility)
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/mp4';
+      const blob = new Blob(chunksRef.current, { type: mimeType });
       onStop(blob);
       source.disconnect();
       analyzer.disconnect();
@@ -210,16 +220,16 @@ function App() {
   const stopAudio = (skipStateUpdate = false) => {
     // If called from an event handler, skipStateUpdate might be the event object
     const shouldSkip = typeof skipStateUpdate === 'boolean' ? skipStateUpdate : false;
-    
+
     if (activeAudioRef.current) {
       activeAudioRef.current.pause();
       activeAudioRef.current = null;
     }
-    
+
     audioResultsRef.current = {};
     nextToPlayRef.current = 0;
     isPlayingQueueRef.current = false;
-    
+
     if (!shouldSkip && state === 'speaking') {
       setState('idle');
     }
@@ -246,9 +256,16 @@ function App() {
     setState('processing');
     try {
       // 1. Transcribe
-      const form = new FormData();
-      form.append('audio', blob, 'recording.webm');
-      const transcribeRes = await fetch(`${BASE_URL}/api/transcribe`, { method: 'POST', body: form });
+      const formData = new FormData();
+      formData.append('audio', blob, 'audio.wav');
+      formData.append('tone', settings.tone);
+      formData.append('language', settings.accent.split('-')[0]);
+
+      const transcribeRes = await fetch(`${BASE_URL}/api/transcribe`, {
+        method: 'POST',
+        body: formData,
+        headers: { 'X-API-Key': API_KEY }
+      });
       const { transcript, language } = await transcribeRes.json();
       setLiveTranscript(transcript);
       addTurn('user', transcript);
@@ -256,11 +273,14 @@ function App() {
       // 2. Chat & Speak Pipeline
       const chatRes = await fetch(`${BASE_URL}/api/chat`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'X-API-Key': API_KEY
+        },
         body: JSON.stringify({
-          transcript,
-          accent: settings.accent,
+          prompt: transcript,
           tone: settings.tone,
+          language: settings.accent.split('-')[0],
           model: settings.model,
           history
         })
@@ -337,9 +357,12 @@ function App() {
 
   const triggerSpeech = async (text, index = 0) => {
     try {
-      const speakRes = await fetch(`${BASE_URL}/api/speak`, {
+      const response = await fetch(`${BASE_URL}/api/speak`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'X-API-Key': API_KEY
+        },
         body: JSON.stringify({
           text,
           engine: settings.engine,
@@ -352,12 +375,12 @@ function App() {
         })
       });
 
-      const usedAccent = speakRes.headers.get('X-Used-Accent');
+      const usedAccent = response.headers.get('X-Used-Accent');
       if (usedAccent && usedAccent !== settings.accent) {
         settings.setAccent(usedAccent);
       }
 
-      const audioBlob = await speakRes.blob();
+      const audioBlob = await response.blob();
       audioResultsRef.current[index] = audioBlob;
       processQueue();
     } catch (e) { console.error("Speech Trigger Error:", e); }
