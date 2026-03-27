@@ -9,6 +9,8 @@ class TTS:
         self.groq_key = os.environ.get("GROQ_API_KEY")
         self.hf_key = os.environ.get("HF_API_KEY") # For Meta MMS Indic-TTS
         self.client = Groq(api_key=self.groq_key) if self.groq_key else None
+        self.cache = {} # Simple in-memory cache: (text, engine, voice, speed) -> content
+        self.max_cache_size = 50
         
         # Mapping for Meta MMS (Massively Multilingual Speech) models on HF
         # These are much better supported for serverless inference than AI4Bharat
@@ -26,6 +28,16 @@ class TTS:
     def generate_audio(self, text, accent="en-US", voice="hannah", speed=1.0, pitch=1.0, tone="professional", engine="orpheus", gender="female"):
         """Generates audio and returns (content/path, type, used_accent)."""
         
+        # Security & Validation
+        text = text.strip()[:1000] # Max 1000 chars for safety
+        if not text: return None, "binary", accent
+        
+        # Cache Check (Only for binary results)
+        cache_key = (text, engine, voice, speed, accent)
+        if cache_key in self.cache:
+            print(f"TTS Cache Hit: '{text[:20]}...'")
+            return self.cache[cache_key], "binary", accent
+
         # 0. Quick detection for Auto-Accent
         # Telugu check
         if any('\u0c00' <= c <= '\u0c7f' for c in text): accent = "te-IN"
@@ -49,9 +61,12 @@ class TTS:
                         speed=speed,
                     )
                     
-                    if hasattr(response, 'content'): return response.content, "binary", accent
-                    elif hasattr(response, 'read'): return response.read(), "binary", accent
-                    else: return b"".join([chunk for chunk in response.iter_bytes()]), "binary", accent
+                    if hasattr(response, 'content'): content = response.content
+                    elif hasattr(response, 'read'): content = response.read()
+                    else: content = b"".join([chunk for chunk in response.iter_bytes()])
+                    
+                    self._save_to_cache(cache_key, content)
+                    return content, "binary", accent
                 except Exception as e:
                     print(f"Groq TTS failed: {e}. Falling back...")
             else:
@@ -81,6 +96,7 @@ class TTS:
                                 time.sleep(5)
                                 continue
                             print(f"SUCCESS: Generated audio with AI4Bharat Indic-TTS ({accent}, {use_gender})")
+                            self._save_to_cache(cache_key, response.content)
                             return response.content, "binary", accent
                         elif response.status_code == 503:
                             print(f"Indic-TTS Model {model_id} is loading (503). Retrying in 5s...")
@@ -119,4 +135,9 @@ class TTS:
                 print(f"Pydub processing failed: {e}")
                 
         return temp_path, "file", accent
+
+    def _save_to_cache(self, key, content):
+        if len(self.cache) >= self.max_cache_size:
+            self.cache.pop(next(iter(self.cache))) # Simple FIFO eviction
+        self.cache[key] = content
 

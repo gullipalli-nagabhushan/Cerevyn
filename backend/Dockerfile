@@ -10,13 +10,12 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-# Copy all files from the backend directory to the container
-# (Requires build context to be set to the backend/ folder)
+# Copy requirements from the current directory (backend)
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy logic
+# Copy all files from the current directory (backend)
 COPY . .
 
 # Use python -m uvicorn for better reliability
-CMD python -m uvicorn server:app --host 0.0.0.0 --port ${PORT:-8000}
+CMD ["python", "-m", "uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8000"]

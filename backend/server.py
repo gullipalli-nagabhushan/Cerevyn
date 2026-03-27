@@ -6,6 +6,7 @@ import asyncio
 
 from fastapi import FastAPI, UploadFile, File, Form, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
@@ -17,6 +18,9 @@ import io
 load_dotenv()
 app = FastAPI()
 
+# Compression
+app.add_middleware(GZipMiddleware, minimum_size=1000)
+
 # CORS Configuration
 # Allowed: Production Vercel URL and Local Development
 app.add_middleware(
@@ -27,10 +31,21 @@ app.add_middleware(
         "http://127.0.0.1:5173",
     ],
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST"], # Restricted
     allow_headers=["*"],
     expose_headers=["X-Used-Accent"],
 )
+
+# Security Headers Middleware
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    response.headers["Content-Security-Policy"] = "default-src 'self'; frame-ancestors 'none';"
+    return response
 
 # Services
 llm_service = LLM()

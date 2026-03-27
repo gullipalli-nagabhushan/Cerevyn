@@ -121,14 +121,28 @@ function useVoiceState() {
 
 function useMediaRecorder(onStop) {
   const mediaRecorderRef = useRef(null);
+  const streamRef = useRef(null);
+  const audioContextRef = useRef(null);
   const chunksRef = useRef([]);
+
+  const preWarm = async () => {
+    if (!streamRef.current) {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+    }
+    if (!audioContextRef.current) {
+      audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
+    }
+  };
 
   const startRecording = async () => {
     chunksRef.current = [];
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    if (!streamRef.current) await preWarm();
+    
+    const stream = streamRef.current;
+    const audioContext = audioContextRef.current;
 
     // VAD Logic
-    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
     const source = audioContext.createMediaStreamSource(stream);
     const analyzer = audioContext.createAnalyser();
     analyzer.fftSize = 512;
@@ -143,7 +157,7 @@ function useMediaRecorder(onStop) {
 
       if (volume > 5) { // Threshold for "talking"
         silenceStart = Date.now();
-      } else if (Date.now() - silenceStart > 1500) { // 1.5s silence
+      } else if (Date.now() - silenceStart > 1000) { // 1.0s silence
         stopRecording();
         return;
       }
@@ -157,7 +171,8 @@ function useMediaRecorder(onStop) {
     mediaRecorderRef.current.onstop = () => {
       const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
       onStop(blob);
-      audioContext.close();
+      source.disconnect();
+      analyzer.disconnect();
     };
     mediaRecorderRef.current.start();
     requestAnimationFrame(checkSilence);
@@ -166,11 +181,11 @@ function useMediaRecorder(onStop) {
   const stopRecording = () => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       mediaRecorderRef.current.stop();
-      mediaRecorderRef.current.stream.getTracks().forEach(t => t.stop());
+      // Keep tracks alive for faster restart
     }
   };
 
-  return { startRecording, stopRecording };
+  return { startRecording, stopRecording, preWarm };
 }
 
 // --- MAIN COMPONENT ---
@@ -191,14 +206,21 @@ function App() {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  const stopAudio = () => {
+  const stopAudio = (skipStateUpdate = false) => {
+    // If called from an event handler, skipStateUpdate might be the event object
+    const shouldSkip = typeof skipStateUpdate === 'boolean' ? skipStateUpdate : false;
+    
     if (activeAudioRef.current) {
       activeAudioRef.current.pause();
       activeAudioRef.current = null;
-      audioResultsRef.current = {};
-      nextToPlayRef.current = 0;
-      isPlayingQueueRef.current = false;
-      if (state === 'speaking') setState('idle');
+    }
+    
+    audioResultsRef.current = {};
+    nextToPlayRef.current = 0;
+    isPlayingQueueRef.current = false;
+    
+    if (!shouldSkip && state === 'speaking') {
+      setState('idle');
     }
   };
 
@@ -213,6 +235,10 @@ function App() {
   }, [settings.speed]);
 
   const handleAudioBlob = async (blob) => {
+    if (blob.size < 500) {
+      console.warn("Audio blob too small, ignoring:", blob.size);
+      return;
+    }
     stopAudio(); // Stop any previous speech
     nextToPlayRef.current = 0; // Reset queue index for new turn
     audioResultsRef.current = {}; // Clear any stale audio
@@ -336,7 +362,7 @@ function App() {
     } catch (e) { console.error("Speech Trigger Error:", e); }
   };
 
-  const { startRecording, stopRecording } = useMediaRecorder(handleAudioBlob);
+  const { startRecording, stopRecording, preWarm } = useMediaRecorder(handleAudioBlob);
 
   const playAudio = (blob) => {
     return new Promise((resolve) => {
@@ -385,12 +411,18 @@ function App() {
       setIsLive(false);
       isLiveRef.current = false;
       stopRecording();
+      // Stop tracks to release microphone
+      if (activeAudioRef.current) activeAudioRef.current.pause();
+      if (mediaRecorderRef.current?.stream) {
+        mediaRecorderRef.current.stream.getTracks().forEach(t => t.stop());
+      }
       stopAudio();
       setState('idle');
     } else {
       setIsLive(true);
       isLiveRef.current = true;
       stopAudio();
+      preWarm(); // Pre-warm the stream
       startRecording();
       setState('listening');
     }
@@ -402,7 +434,11 @@ function App() {
       if (e.code === 'Space' || e.code === 'Tab') {
         e.preventDefault();
         if (state === 'speaking') {
-          stopAudio();
+          stopAudio(isLive); // Skip state update if live, as we'll set it to listening
+          if (isLive) {
+            startRecording();
+            setState('listening');
+          }
         } else {
           toggleMic();
         }
