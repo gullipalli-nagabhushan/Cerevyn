@@ -30,6 +30,8 @@ app.add_middleware(
         "https://cerevyn-bot.vercel.app",
         "http://localhost:5173",
         "http://127.0.0.1:5173",
+        "http://10.27.40.90:5173",
+        "http://192.168.130.81:5173",
     ],
     allow_credentials=True,
     allow_methods=["GET", "POST"], # Restricted
@@ -71,7 +73,11 @@ stt_base = STT() # Now using Groq Cloud API
 
 @app.post("/api/transcribe")
 async def transcribe(audio: UploadFile = File(...), token: str = Depends(get_api_key)):
-    with tempfile.NamedTemporaryFile(delete=False, suffix='.wav') as tmp:
+    # Get extension from filename or default to .wav
+    ext = os.path.splitext(audio.filename)[1] if audio.filename else ".wav"
+    if not ext: ext = ".wav"
+    
+    with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
         tmp.write(await audio.read())
         audio_path = tmp.name
     

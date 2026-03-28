@@ -163,10 +163,10 @@ function useMediaRecorder(onStop) {
       analyzer.getByteFrequencyData(buffer);
       const volume = buffer.reduce((a, b) => a + b) / buffer.length;
 
-      const threshold = isMobile() ? 12 : 5; // Higher threshold on mobile to ignore noise
-      if (volume > threshold) { // Threshold for "talking"
+      const threshold = isMobile() ? 10 : 5; // Reduced from 12 to 10 for better sensitivity
+      if (volume > threshold) {
         silenceStart = Date.now();
-      } else if (Date.now() - silenceStart > 1000) { // 1.0s silence
+      } else if (Date.now() - silenceStart > 1500) { // Increased to 1.5s for more natural pauses
         stopRecording();
         return;
       }
@@ -179,9 +179,12 @@ function useMediaRecorder(onStop) {
     };
     mediaRecorderRef.current.onstop = () => {
       // Determine format (Mobile compatibility)
-      const mimeType = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/mp4';
+      const isWebM = MediaRecorder.isTypeSupported('audio/webm');
+      const mimeType = isWebM ? 'audio/webm' : 'audio/mp4';
+      const extension = isWebM ? '.webm' : '.m4a';
+      
       const blob = new Blob(chunksRef.current, { type: mimeType });
-      onStop(blob);
+      onStop(blob, extension);
       source.disconnect();
       analyzer.disconnect();
     };
@@ -245,9 +248,11 @@ function App() {
     }
   }, [settings.speed]);
 
-  const handleAudioBlob = async (blob) => {
+  const handleAudioBlob = async (blob, extension = '.wav') => {
     if (blob.size < 500) {
       console.warn("Audio blob too small, ignoring:", blob.size);
+      // If in live mode and we ignored it, we must reset state to idle to trigger next loop
+      if (isLiveRef.current) setState('idle');
       return;
     }
     stopAudio(); // Stop any previous speech
@@ -257,7 +262,7 @@ function App() {
     try {
       // 1. Transcribe
       const formData = new FormData();
-      formData.append('audio', blob, 'audio.wav');
+      formData.append('audio', blob, `audio${extension}`);
       formData.append('tone', settings.tone);
       formData.append('language', settings.accent.split('-')[0]);
 
@@ -421,11 +426,12 @@ function App() {
 
     if (state === 'idle') {
       const timer = setTimeout(() => {
-        if (state === 'idle' && isLive) {
+        // Double check state hasn't changed
+        if (state === 'idle' && isLiveRef.current) {
           startRecording();
           setState('listening');
         }
-      }, 50); // Immediate restart
+      }, 300); // 300ms pause for better UX between turns
       return () => clearTimeout(timer);
     }
   }, [state, isLive]);
